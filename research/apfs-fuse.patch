@@ -1,0 +1,165 @@
+diff --git a/ApfsLib/ApfsContainer.h b/ApfsLib/ApfsContainer.h
+index 49f12b8..7856de3 100644
+--- a/ApfsLib/ApfsContainer.h
++++ b/ApfsLib/ApfsContainer.h
+@@ -48,6 +48,7 @@ public:
+ 	bool ReadAndVerifyHeaderBlock(uint8_t *data, paddr_t paddr) const;
+
+ 	uint32_t GetBlocksize() const { return m_nx.nx_block_size; }
++	const apfs_uuid_t &uuid() const { return m_nx.nx_uuid; }
+ 	uint64_t GetBlockCount() const { return m_nx.nx_block_count; }
+ 	uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }
+
+diff --git a/ApfsLib/ApfsVolume.cpp b/ApfsLib/ApfsVolume.cpp
+index 6c6ffa5..8483718 100644
+--- a/ApfsLib/ApfsVolume.cpp
++++ b/ApfsLib/ApfsVolume.cpp
+@@ -18,6 +18,7 @@
+ */
+
+ #include <cstring>
++#include <cstddef>
+ #include <vector>
+ #include <iostream>
+
+@@ -38,6 +39,11 @@ ApfsVolume::ApfsVolume(ApfsContainer &container) :
+ {
+ 	m_apsb_paddr = 0;
+ 	m_is_encrypted = false;
++	m_snapshot_xid = 0;
++	m_snapshot_sblock_paddr = 0;
++	memset(m_live_volume_uuid, 0, sizeof(m_live_volume_uuid));
++	memset(m_snapshot_uuid, 0, sizeof(m_snapshot_uuid));
++	m_has_snapshot_uuid = false;
+ }
+
+ ApfsVolume::~ApfsVolume()
+@@ -137,6 +143,7 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+
+ 	if (m_sb.apfs_snap_meta_tree_oid == 0)
+ 		return false;
++	memcpy(m_live_volume_uuid, m_sb.apfs_vol_uuid, sizeof(m_live_volume_uuid));
+
+ 	if (!snap_btree.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid)) {
+ 		std::cerr << "snap meta tree init failed" << std::endl;
+@@ -149,7 +156,20 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+ 		return false;
+ 	}
+
++	if (snap_entry.key_len != sizeof(j_snap_metadata_key_t) ||
++		snap_entry.val_len < offsetof(j_snap_metadata_val_t, name) + 1)
++		return false;
++	const auto *selected_key = reinterpret_cast<const j_snap_metadata_key_t *>(snap_entry.key);
++	if (selected_key->hdr.obj_id_and_type != snap_key.hdr.obj_id_and_type)
++		return false;
+ 	snap_val = reinterpret_cast<const j_snap_metadata_val_t *>(snap_entry.val);
++	const size_t name_len = snap_val->name_len;
++	if (name_len == 0 || name_len > snap_entry.val_len - offsetof(j_snap_metadata_val_t, name) ||
++		snap_val->name[name_len - 1] != 0 || memchr(snap_val->name, 0, name_len - 1))
++		return false;
++	m_snapshot_xid = selected_key->hdr.obj_id_and_type & OBJ_ID_MASK;
++	m_snapshot_name.assign(reinterpret_cast<const char *>(snap_val->name), name_len - 1);
++	m_snapshot_sblock_paddr = snap_val->sblock_oid;
+
+ 	if (!m_omap.Init(m_sb.apfs_omap_oid, m_sb.apfs_o.o_xid)) {
+ 		std::cerr << "WARNING: Volume omap tree init failed." << std::endl;
+@@ -167,7 +187,10 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+
+ 	memcpy(&m_sb, blk.data(), sizeof(m_sb));
+
+-	if (m_sb.apfs_magic != APFS_MAGIC)
++	if (m_sb.apfs_magic != APFS_MAGIC ||
++		(m_sb.apfs_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_FS ||
++		m_sb.apfs_o.o_xid > m_snapshot_xid ||
++		memcmp(m_sb.apfs_vol_uuid, m_live_volume_uuid, sizeof(m_live_volume_uuid)) != 0)
+ 		return false;
+
+ 	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED)
+@@ -196,8 +219,30 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+ 		m_is_encrypted = true;
+ 	}
+
+-	if (!m_fs_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_omap))
+-		std::cerr << "WARNING: root tree init failed" << std::endl;
++	if (m_sb.apfs_snap_meta_ext_oid != 0) {
++		omap_res_t om;
++		if (m_omap.Lookup(om, m_sb.apfs_snap_meta_ext_oid, m_sb.apfs_o.o_xid)) {
++			if (!ReadBlocks(blk.data(), om.paddr, 1, 0) || !VerifyBlock(blk.data(), blk.size()))
++				return false;
++			const auto *ext = reinterpret_cast<const snap_meta_ext_obj_phys_t *>(blk.data());
++			if ((ext->smeop_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_SNAP_META_EXT ||
++				ext->smeop_o.o_oid != m_sb.apfs_snap_meta_ext_oid ||
++				ext->smeop_sme.sme_snap_xid != m_snapshot_xid)
++				return false;
++			memcpy(m_snapshot_uuid, ext->smeop_sme.sme_uuid, sizeof(m_snapshot_uuid));
++			bool nonzero_uuid = false;
++			for (uint8_t byte : m_snapshot_uuid)
++				nonzero_uuid |= byte != 0;
++			if (!nonzero_uuid)
++				return false;
++			m_has_snapshot_uuid = true;
++		}
++	}
++
++	if (!m_fs_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_omap)) {
++		std::cerr << "ERROR: snapshot root tree init failed" << std::endl;
++		return false;
++	}
+
+ 	if (!m_extentref_tree.Init(m_sb.apfs_extentref_tree_oid, m_sb.apfs_o.o_xid))
+ 		std::cerr << "WARNING: extentref tree init failed" << std::endl;
+@@ -207,8 +252,10 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+
+ 	if (m_sb.apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME)
+ 	{
+-		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid))
+-			std::cerr << "ERROR: fext tree init failed" << std::endl;
++		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid)) {
++			std::cerr << "ERROR: snapshot fext tree init failed" << std::endl;
++			return false;
++		}
+ 	}
+
+ 	return true;
+diff --git a/ApfsLib/ApfsVolume.h b/ApfsLib/ApfsVolume.h
+index a9a8448..29fd691 100644
+--- a/ApfsLib/ApfsVolume.h
++++ b/ApfsLib/ApfsVolume.h
+@@ -20,6 +20,7 @@
+ #pragma once
+
+ #include <cstdint>
++#include <string>
+
+ #include "DiskStruct.h"
+ #include "ApfsNodeMapperBTree.h"
+@@ -40,6 +41,16 @@ public:
+
+ 	const char *name() const { return reinterpret_cast<const char *>(m_sb.apfs_volname); }
+
++	// Populated only after a successful MountSnapshot. These values come from
++	// the exact metadata record and its frozen superblock, not from argv.
++	xid_t selectedSnapshotXid() const { return m_snapshot_xid; }
++	const std::string &selectedSnapshotName() const { return m_snapshot_name; }
++	paddr_t selectedSuperblockPaddr() const { return m_snapshot_sblock_paddr; }
++	const apfs_superblock_t &selectedSuperblock() const { return m_sb; }
++	const apfs_uuid_t &liveVolumeUuid() const { return m_live_volume_uuid; }
++	bool hasSelectedSnapshotUuid() const { return m_has_snapshot_uuid; }
++	const apfs_uuid_t &selectedSnapshotUuid() const { return m_snapshot_uuid; }
++
+ 	void dump(BlockDumper &bd);
+
+ 	BTree &fstree() { return m_fs_tree; }
+@@ -65,6 +76,12 @@ private:
+ 	BTree m_fext_tree;
+
+ 	paddr_t m_apsb_paddr;
++	xid_t m_snapshot_xid;
++	std::string m_snapshot_name;
++	paddr_t m_snapshot_sblock_paddr;
++	apfs_uuid_t m_live_volume_uuid;
++	apfs_uuid_t m_snapshot_uuid;
++	bool m_has_snapshot_uuid;
+
+ 	bool m_is_encrypted;
+ 	AesXts m_aes;
