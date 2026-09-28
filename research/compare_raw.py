@@ -278,7 +278,12 @@ if args.raw_identity:
             raise ValueError(
                 f"raw and mounted snapshot identities disagree on {field}"
             )
-    if raw.get("volume_group_uuid") != scope_identity.get("volume_group_uuid"):
+    # Standalone volumes encode no group as a zero UUID on disk; diskutil
+    # omits the property, which the mounted manifest records as null.
+    raw_group = raw.get("volume_group_uuid")
+    if raw_group == "00000000-0000-0000-0000-000000000000":
+        raw_group = None
+    if raw_group != scope_identity.get("volume_group_uuid"):
         raise ValueError("raw and mounted volume group UUIDs disagree")
     for field in (
         "snapshot_superblock_paddr",

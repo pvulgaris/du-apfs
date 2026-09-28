@@ -174,7 +174,7 @@ class CompareRawTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("ValueError", result.stderr)
 
-    def run_identity_comparison(self, change=None):
+    def run_identity_comparison(self, change=None, *, standalone=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             dump = root / "dump.txt"
@@ -237,7 +237,9 @@ class CompareRawTests(unittest.TestCase):
                 "snapshot_uuid": "11111111-1111-1111-1111-111111111111",
                 "base_volume_uuid": "22222222-2222-2222-2222-222222222222",
                 "container_uuid": "33333333-3333-3333-3333-333333333333",
-                "volume_group_uuid": "44444444-4444-4444-4444-444444444444",
+                "volume_group_uuid": None
+                if standalone
+                else "44444444-4444-4444-4444-444444444444",
             }
             scope.write_text(
                 json.dumps({"errors": [], "skipped": [], "identity": mounted})
@@ -254,6 +256,10 @@ class CompareRawTests(unittest.TestCase):
                 "sealed_fext_tree_oid": 0,
                 "block_size": 4096,
             }
+            if standalone:
+                raw["volume_group_uuid"] = (
+                    "00000000-0000-0000-0000-000000000000"
+                )
             if change:
                 change(raw)
             raw_sidecar.write_text(json.dumps(raw))
@@ -344,6 +350,14 @@ class CompareRawTests(unittest.TestCase):
             ("xid", lambda r: r.update(snapshot_xid=2)),
             ("volume", lambda r: r.update(base_volume_uuid="5" * 36)),
             ("container", lambda r: r.update(container_uuid="6" * 36)),
+            ("group", lambda r: r.update(volume_group_uuid="8" * 36)),
+            ("missing group", lambda r: r.update(volume_group_uuid=None)),
+            (
+                "zero group",
+                lambda r: r.update(
+                    volume_group_uuid="00000000-0000-0000-0000-000000000000"
+                ),
+            ),
             ("root", lambda r: r.pop("filesystem_root_oid")),
             ("uuid", lambda r: r.update(snapshot_uuid="7" * 36)),
         ]
@@ -352,6 +366,16 @@ class CompareRawTests(unittest.TestCase):
                 result, _ = self.run_identity_comparison(change)
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("ValueError", result.stderr)
+
+    def test_standalone_volume_has_no_group(self):
+        result, report = self.run_identity_comparison(standalone=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(report["snapshot_identity_verified"])
+        result, _ = self.run_identity_comparison(
+            lambda r: r.update(volume_group_uuid="8" * 36), standalone=True
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("volume group UUIDs disagree", result.stderr)
 
     def test_missing_raw_uuid_reports_weaker_identity(self):
         result, report = self.run_identity_comparison(

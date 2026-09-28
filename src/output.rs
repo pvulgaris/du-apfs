@@ -146,8 +146,7 @@ pub fn write(
     let filesystem = if let (Some(operand), Some(fs)) =
         (scan.filesystem_operand, scan.filesystem_control.as_ref())
     {
-        let block_size =
-            u64::try_from(fs.f_bsize).map_err(|_| invalid("invalid filesystem block size"))?;
+        let block_size = u64::from(fs.f_bsize);
         if block_size == 0 {
             return Err(invalid("invalid filesystem block size"));
         }
@@ -289,15 +288,17 @@ mod tests {
             CString::new("/first").unwrap(),
             CString::new("/second").unwrap(),
         ];
-        let mut options = args::Options::default();
-        options.paths = vec![
-            Path::new(".").to_path_buf(),
-            Path::new("/second/").to_path_buf(),
-        ];
-        options.all = true;
-        options.null = true;
-        options.total = true;
-        options.block_size = 1;
+        let mut options = args::Options {
+            paths: vec![
+                Path::new(".").to_path_buf(),
+                Path::new("/second/").to_path_buf(),
+            ],
+            all: true,
+            null: true,
+            total: true,
+            block_size: 1,
+            ..Default::default()
+        };
         let mut out = Vec::new();
         write_text(&nodes, &roots, &options, &mut out).unwrap();
         assert_eq!(
@@ -356,8 +357,10 @@ mod tests {
             node(b"/root", 0, 0, true, true, 0),
         ];
         let roots = vec![CString::new("/root").unwrap()];
-        let mut options = args::Options::default();
-        options.paths = vec![Path::new("root").to_path_buf()];
+        let options = args::Options {
+            paths: vec![Path::new("root").to_path_buf()],
+            ..Default::default()
+        };
         assert_eq!(
             write_text(&nodes, &roots, &options, Reject)
                 .unwrap_err()
@@ -375,9 +378,11 @@ mod tests {
     #[test]
     fn streamed_document_has_the_expected_schema() {
         let fixture = Fixture::new();
-        let mut options = args::Options::default();
-        options.paths = vec![fixture.0.clone()];
-        options.json = true;
+        let options = args::Options {
+            paths: vec![fixture.0.clone()],
+            json: true,
+            ..Default::default()
+        };
         let scan = crate::scan::run(&options).unwrap();
         let mut out = Vec::new();
         write(&scan, &options, 0.5, &mut out).unwrap();
