@@ -49,7 +49,7 @@ impl DenyAccess {
     fn new(path: &Path) -> Self {
         use std::os::unix::fs::PermissionsExt;
         let guard = Self(path.to_owned(), fs::metadata(path).unwrap().permissions());
-        fs::set_permissions(path, fs::Permissions::from_mode(0)).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o0)).unwrap();
         guard
     }
 }

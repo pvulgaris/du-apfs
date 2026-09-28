@@ -142,6 +142,22 @@ establish useful repeatable gains. The production build keeps portable ThinLTO,
 three mapping workers, bounded queues, deferred path construction, paged bitmaps
 for shallow output, and an event sweep for deeper subtree unions.
 
+The 2026-09-24 Dust-inspired hashing experiment also rejected a new dependency.
+Three isolated release builds compared the baseline with `rustc-hash 2.1.3`
+on numeric accounting maps, then additionally on the filesystem lookup map.
+Twelve balanced-order rounds per mode produced 108 measured package-cache
+scans, plus nine warmups. Median wall seconds (baseline/accounting/all numeric)
+were 0.665/0.610/0.710 for summary, 0.448/0.461/0.470 for depth one, and
+0.851/1.015/1.278 for depth two. Timing was noisy and did not establish a
+consistent improvement; peak RSS was essentially unchanged. These are live,
+warm-cache subtree results, not whole-disk timings or proof of a regression.
+All measurement entries, container totals, file counts, and coverage counters
+matched within each mode; dynamic statfs controls, elapsed time, and bounded
+xattr path examples were excluded from comparison. All three builds passed
+27 tests; the external raw-snapshot oracle remained explicitly ignored.
+Production source, Cargo dependencies, and the installed binary were unchanged.
+Private receipts retain source/binary hashes, raw results, timings, and harness.
+
 An earlier DaisyDisk activity observation suggested about 80 seconds, but its
 scope was unverified. The guest GUI trial required activation and produced no
 timed scan. DaisyDisk also documents different partial-clone accounting. There
@@ -193,3 +209,60 @@ speedup is claimed. The rebuilt installed binary's SHA-256 is
 `e141ecc85d145495065fdf2fb2bab059e410f529c2c63f52c52a5470e06b2c9a`. These
 comparisons verify the reductions against the previous Rust implementation; they
 do not replace the independent raw-snapshot proof or remove its limits.
+
+## Post-merge coverage checks
+
+The revisions in this section refer to the original dotfiles history before
+the standalone repository was extracted.
+
+The merged revision `0611cd02c1fee047afbe6a7b01005b6ce6827f0d` has the same
+tree as the verified migration head `84b06f4`. These checks used the installed
+binary with SHA-256 `e141ecc85d145495065fdf2fb2bab059e410f529c2c63f52c52a5470e06b2c9a`.
+Private receipts retain harnesses, reports, source hashes, and cleanup records.
+
+On a disposable macOS 26.6.2 arm64 guest, a 32 MiB file, its clone, and a hard
+link occupied a 32 MiB mapped union. Rewriting 4 MiB of the clone increased the
+union to 36 MiB. A mounted native snapshot preserved the original 32 MiB;
+combined live/snapshot scans still counted shared blocks once. After deleting
+all live fixture files, the live namespace measured zero while the snapshot
+retained 32 MiB. Deleting the snapshot reduced volume allocation by 34,353,152
+bytes, including snapshot and filesystem metadata. Live container changes were
+not treated as an exact per-file reclamation measurement.
+
+The complete mounted snapshot comparison independently matched 34,217,984 bytes
+across 86 mapped files, with no unexpected ranges, missing visible streams,
+per-file differences, or unexplained inodes. Raw and mounted snapshot UUIDs
+matched. This exposed a comparator representation bug: standalone volumes have
+an all-zero group UUID on disk, while `diskutil` omits the group. The comparator
+now treats those representations as equivalent. Fourteen comparator tests pass,
+including rejection of missing, zero, or differing groups for grouped volumes.
+No production Rust code changed.
+
+A separate 512 MiB APFS image tested six frozen checkpoints: empty, cloned,
+partially overwritten, one remaining clone, last clone deleted, and a closed
+unlinked file. At every checkpoint, independently counted bitmap-free bytes
+plus the verified main pending-free queue exactly matched Apple's read-only
+`diskutil` container counter. Creation, copy-on-write, and deletion changed
+Apple-accounted occupancy by exactly the expected 32, 4, 4, and 32 MiB in this
+run. The harness permits up to 1 MiB of metadata variation for these deltas;
+raw-counter equality has no tolerance. An unlinked 32 MiB file remained allocated
+while open despite an empty scanned namespace; closing its descriptor freed
+32 MiB. This verifies why a path total is not a deletion-savings estimate.
+
+On the macOS 27.0 arm64 host, metadata before and after scanning stayed identical
+for 16 dataless iCloud files and 32 Dropbox files, half dataless and half
+resident. Inode, size, allocation, residency flags, and change timestamps were
+checked under the materialization guard. This is a bounded sample, not proof
+for every provider state or a network-activity audit.
+
+A privileged host scan mapped 391,741,829,120 bytes across 6,808,413 files in
+176.26 seconds. Unreadable directories fell from 251 to 26; ordinary permission
+errors disappeared. Remaining coverage included 90 operation-not-permitted
+errors, 436 unmapped-allocation errors, 34,144,256 known unmeasured bytes, and
+4,637,562 conservative unknown-attribute entries. A separate root-owned backup
+cache scan mapped 48,330,969,088 bytes with complete coverage. These live scans
+are diagnostic observations, not atomic comparisons or a new benchmark.
+
+The owned guest was deleted after preserving evidence. Fixture correctness does
+not remove host access restrictions, unknown attributes, unmounted snapshots,
+or filesystem metadata from the remaining whole-drive accounting limits.

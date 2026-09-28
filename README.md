@@ -2,17 +2,18 @@
 
 `du-apfs` is a read-only, APFS-aware alternative for common `du` invocations on
 macOS. It reports distinct physical blocks referenced by each path, including
-partial APFS clones and sparse files. The Rust crate is self-contained here so
-it can move to its own repository. The only dotfiles integration is the
-`bin/du-apfs` launcher, which builds the binary on first use into
-`~/.local/share/du-apfs/`.
+partial APFS clones and sparse files. Building requires Rust and Apple's
+Command Line Tools. Install from this repository:
 
 ```sh
-bin/du-apfs -sh ~/.tart
-bin/du-apfs -h -d1 ~/Library
-bin/du-apfs -B1 -s ~/Projects
-bin/du-apfs -s --json / > disk.json
-(cd src/du-apfs && cargo test --locked --release)
+cargo install --locked --git https://github.com/pvulgaris/du-apfs --branch main du-apfs
+```
+
+```sh
+du-apfs -sh ~/.tart
+du-apfs -h -d1 ~/Library
+du-apfs -B1 -s ~/Projects
+du-apfs -s --json / > disk.json
 ```
 
 The CLI accepts `-a`, `-s`, `-d`, `-h`, `-k`, `-m`, `-g`, `-B`, `-c`, `-x`, and
@@ -26,9 +27,7 @@ and the command exits nonzero. JSON records those failures, with their original
 argument indices, in `coverage.operand_failures`. A failed operand has no
 numeric text row. Diagnostics on stderr name the affected paths and are bounded.
 
-Building requires Rust and Apple's Command Line Tools. The launcher uses a
-release build with ThinLTO and keeps regenerable build files in
-`~/.cache/du-apfs/`. Rust is the only maintained implementation.
+Release builds use ThinLTO. Rust is the only maintained implementation.
 
 Before resolving scan paths, the scanner disables dataless-file materialization
 through macOS's public I/O policy API and verifies the policy. This covers
@@ -91,6 +90,16 @@ clones, and its access permissions may differ from a terminal scan.
 
 ## Verification and benchmarks
 
+From a checkout, run `cargo fmt --check`,
+`cargo clippy --locked --all-targets -- -D warnings`,
+`cargo test --locked --release`, and
+`python3 -m unittest discover -s research -p 'test_*.py'`.
+CI runs these checks on macOS. Native tests require APFS with 4096-byte blocks.
+The raw-snapshot export test is explicitly ignored in ordinary runs because it
+requires a separately prepared read-only snapshot and independent raw records.
+Passing CI does not establish whole-disk coverage or rerun the historical raw
+snapshot comparisons below.
+
 The installed Rust build and a fresh production-mapper export were checked
 against raw records from a frozen macOS 26.6.2 APFS Data snapshot. Every mapped
 range from 123,597 entries belongs to its corresponding raw inode; the
@@ -138,7 +147,7 @@ For a separate container control total, the research helper can compare a JSON
 scan with Apple's `diskutil apfs list -plist` counters:
 
 ```sh
-python3 src/du-apfs/research/reconcile.py disk.json
+python3 research/reconcile.py disk.json
 ```
 
 It keeps containers separate and reports occupied bytes minus mapped bytes. That
