@@ -562,6 +562,7 @@ fn unreadable_directories_are_not_displayed_as_empty() {
         .unwrap();
         let scan = crate::scan::run(&options).unwrap();
         assert_eq!(scan.unreadable, 1);
+        assert_eq!(scan.errors, 1);
         assert!(!crate::output::complete(&scan));
         let mut text = Vec::new();
         crate::output::write(&scan, &options, 0.0, &mut text).unwrap();
