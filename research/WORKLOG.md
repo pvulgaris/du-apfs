@@ -1,12 +1,11 @@
 # Measurement evidence
 
 Investigated 2026-09-23 through 2026-09-24. This records accepted findings,
-reproducible checks, and their limits. Transient experiments, exact historical
-binaries, profiles, private manifests, and raw dumps are kept outside the
-project because they can contain private paths. The retired Go implementation
-remains in version history. [README.md](README.md) describes the retained
-verification tools; [SURVEY.md](SURVEY.md) explains the measurement and reviewed
-interfaces.
+reproducible checks, and their limits. Raw dumps, manifests and profiles are not
+published because they contain the scanned machines' filenames. An earlier Go
+implementation preceded the Rust one. [README.md](README.md) describes the
+retained verification tools; [SURVEY.md](SURVEY.md) explains the measurement and
+reviewed interfaces.
 
 ## Production contract
 
@@ -122,7 +121,7 @@ unsandboxed native controls.
 
 Apple M4 Pro, 12 CPUs, 48 GiB RAM, macOS 27.0 arm64. Peak RSS is measured by
 Apple's `/usr/bin/time -lp`, not lifetime allocator totals. File opens dominate
-native samples. Detailed benchmark output and binary hashes remain archived.
+native samples.
 
 | Trial                                                       | Result                                                         | Interpretation                                                                          |
 | ----------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -155,70 +154,12 @@ All measurement entries, container totals, file counts, and coverage counters
 matched within each mode; dynamic statfs controls, elapsed time, and bounded
 xattr path examples were excluded from comparison. All three builds passed
 27 tests; the external raw-snapshot oracle remained explicitly ignored.
-Production source, Cargo dependencies, and the installed binary were unchanged.
-Private receipts retain source/binary hashes, raw results, timings, and harness.
+Production source and Cargo dependencies were unchanged.
 
-An earlier DaisyDisk activity observation suggested about 80 seconds, but its
-scope was unverified. The guest GUI trial required activation and produced no
-timed scan. DaisyDisk also documents different partial-clone accounting. There
-is no accepted equivalent-workload DaisyDisk speed comparison.
+There is no equivalent-workload comparison with DaisyDisk, which also documents
+different partial-clone accounting.
 
-## Final migration checkpoint
-
-The source was based on `4035c2f`. On macOS 27.0 arm64, 28 Rust release tests
-passed; the separately exercised snapshot exporter was ignored in the ordinary
-suite. Formatting, launcher checks, and 13 independent comparator tests passed.
-The final installed binary SHA-256 was
-`23648062496cce92d552a4de0479846e4971e5fbbbcaed67c7382d04ac069549`.
-
-Eight installed-command fixtures covered missing first/last/all operands,
-unsupported filesystems, dangling/cross-filesystem symlinks, duplicates, and
-unreadable directory text/JSON behavior. An immutable framework scan reproduced
-110,409 files and 4,685,074,432 mapped bytes, with zero mapping errors or known
-unmeasured bytes and 39,704 conservative unknown-attribute entries. Its exit
-status correctly indicated incomplete coverage.
-
-The private receipt binds exact source hashes, environment, build artifact,
-installed binary, and results. The owned test VM was stopped and removed after
-preserving its immutable image and all oracle evidence. Fixture proofs do not
-establish complete live-disk coverage; attributes, access restrictions, unseen
-snapshots, and filesystem metadata remain explicit limits.
-
-## Reduction verification
-
-Three reduction rounds removed the retired Go source, condensed this evidence,
-removed duplicate output filtering and retained node state, reused native
-mapping results across the worker boundary, and shared fixture setup. The
-scanner owns output selection; rendered-path tests cover summary, depth, and
-file inclusion. The native mapper, materialization guard, and snapshot exporter
-are unchanged.
-
-After all Rust cuts, a fresh build passed 27 release tests, with only the
-snapshot exporter ignored. Forty-four installed-command comparisons matched the
-previous Rust binary's text or normalized JSON, including failed/duplicate
-operands and symlinks. Five isolated mutations were rejected: duplicate
-physical-block counts, ignored depth, reversed output order, hidden unknown
-attributes, and enabled materialization. The 13 raw comparator tests also
-passed.
-
-Eight alternating detailed scans of immutable frameworks matched all 172,993
-ordered entries, 110,409 files, 4,685,074,432 mapped bytes, and coverage
-counters. Median elapsed was 4.470 seconds before and 4.325 seconds after; peak
-RSS medians were 52,477,952 and 50,708,480 bytes. Timing varied across runs; no
-speedup is claimed. The rebuilt installed binary's SHA-256 is
-`e141ecc85d145495065fdf2fb2bab059e410f529c2c63f52c52a5470e06b2c9a`. These
-comparisons verify the reductions against the previous Rust implementation; they
-do not replace the independent raw-snapshot proof or remove its limits.
-
-## Post-merge coverage checks
-
-The revisions in this section refer to the original dotfiles history before
-the standalone repository was extracted.
-
-The merged revision `0611cd02c1fee047afbe6a7b01005b6ce6827f0d` has the same
-tree as the verified migration head `84b06f4`. These checks used the installed
-binary with SHA-256 `e141ecc85d145495065fdf2fb2bab059e410f529c2c63f52c52a5470e06b2c9a`.
-Private receipts retain harnesses, reports, source hashes, and cleanup records.
+## Clone, snapshot and deletion checks
 
 On a disposable macOS 26.6.2 arm64 guest, a 32 MiB file, its clone, and a hard
 link occupied a 32 MiB mapped union. Rewriting 4 MiB of the clone increased the
@@ -263,6 +204,5 @@ errors, 436 unmapped-allocation errors, 34,144,256 known unmeasured bytes, and
 cache scan mapped 48,330,969,088 bytes with complete coverage. These live scans
 are diagnostic observations, not atomic comparisons or a new benchmark.
 
-The owned guest was deleted after preserving evidence. Fixture correctness does
-not remove host access restrictions, unknown attributes, unmounted snapshots,
+Fixture correctness does not remove host access restrictions, unknown attributes, unmounted snapshots,
 or filesystem metadata from the remaining whole-drive accounting limits.

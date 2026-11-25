@@ -1,7 +1,12 @@
 # Measurement research
 
 These tools are independent checks and experiments. They are not runtime
-dependencies of `du-apfs`. Keep machine-specific dumps, manifests, profiles and
+dependencies of `du-apfs`, and the `du-apfs` binary neither builds nor links
+them.
+
+`apfs-fuse.patch` modifies [apfs-fuse](https://github.com/sgan81/apfs-fuse) and
+`snapshot-dump.cpp` builds only against its ApfsLib, so both are licensed under
+apfs-fuse's GPL-2.0-or-later. Everything else in this repository is MIT. Keep machine-specific dumps, manifests, profiles and
 benchmark output outside the repository: they can contain private filenames.
 
 The baseline is a union of raw APFS stream extents from a stable volume. A
