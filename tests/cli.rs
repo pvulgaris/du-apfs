@@ -44,3 +44,33 @@ fn extended_attributes_do_not_fail_the_scan() {
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     assert!(output.stderr.is_empty(), "{output:?}");
 }
+
+#[test]
+fn an_unreadable_directory_is_reported_once() {
+    if running_as_root() {
+        eprintln!("permission-denial fixture requires an unprivileged test runner");
+        return;
+    }
+    let fixture = Fixture::new("denied");
+    // The escape character checks that names cannot drive the terminal.
+    let denied = fixture.0.join("denied\x1b");
+    fs::create_dir(&denied).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o000)).unwrap();
+    let output = du_apfs(&["-s"], &fixture.0);
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        stderr,
+        format!(
+            "du-apfs: {}/denied\\u{{1b}}: Permission denied (os error 13)\n\
+             du-apfs: incomplete: 1 error, 0 bytes known unmeasured\n",
+            fixture.0.display()
+        )
+    );
+}
+
+fn running_as_root() -> bool {
+    Command::new("id").arg("-u").output().unwrap().stdout == b"0\n"
+}

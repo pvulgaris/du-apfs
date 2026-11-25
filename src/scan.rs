@@ -365,7 +365,6 @@ pub(crate) fn run(options: &Options) -> std::io::Result<Scan> {
             };
             scan.tree.nodes[owner].allocated += meta.allocated;
             scan.tree.nodes[owner].unmeasured += meta.allocated;
-            scan.audit(&path);
             let path = Arc::new(path);
             let child = Location {
                 parent: owner,
@@ -397,6 +396,10 @@ pub(crate) fn run(options: &Options) -> std::io::Result<Scan> {
                     scan.unreadable_paths
                         .push(path.to_string_lossy().into_owned());
                 }
+            } else {
+                // Only after a successful listing: an unreadable directory
+                // fails its attribute listing too, and would count twice.
+                scan.audit(&path);
             }
         }
         drop(jobs_tx);

@@ -26,6 +26,24 @@ fn main() {
     }
 }
 
+// Paths come from the scanned tree; escape control characters so a crafted
+// filename cannot send escape sequences to the terminal.
+fn printable(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control() {
+                c.escape_default().to_string()
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
+}
+
+fn count(n: u64, noun: &str) -> String {
+    format!("{n} {noun}{}", if n == 1 { "" } else { "s" })
+}
+
 fn execute() -> io::Result<i32> {
     let options = match args::parse(std::env::args_os().skip(1)) {
         Ok(options) => options,
@@ -49,29 +67,23 @@ fn execute() -> io::Result<i32> {
         if output::complete(&scan) {
             return Ok(0);
         }
-        let mut seen = std::collections::HashSet::new();
         let mut shown = 0;
-        for detail in &scan.error_details {
+        for detail in scan.error_details.iter().take(10) {
             let path = detail["path"].as_str().unwrap_or("?");
             let reason = detail["reason"].as_str().unwrap_or("unknown error");
-            if !seen.insert((path, reason)) {
-                continue;
-            }
-            if shown == 10 {
-                break;
-            }
-            eprintln!("du-apfs: {path:?}: {reason}");
+            eprintln!("du-apfs: {}: {reason}", printable(path));
             shown += 1;
         }
         if scan.errors > shown {
             eprintln!(
-                "du-apfs: {} further errors; see --json coverage",
-                scan.errors - shown
+                "du-apfs: {} more; see --json coverage",
+                count(scan.errors - shown, "error")
             );
         }
         eprintln!(
-            "du-apfs: incomplete: {} errors, {} known unmeasured bytes",
-            scan.errors, scan.tree.nodes[0].unmeasured
+            "du-apfs: incomplete: {}, {} known unmeasured",
+            count(scan.errors, "error"),
+            count(scan.tree.nodes[0].unmeasured as u64, "byte")
         );
         Ok(1)
     })();
