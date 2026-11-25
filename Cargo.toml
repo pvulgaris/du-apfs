@@ -2,6 +2,12 @@
 name = "du-apfs"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "APFS-aware disk usage for macOS: distinct physical blocks, with clones counted once"
+license = "MIT"
+repository = "https://github.com/pvulgaris/du-apfs"
+keywords = ["apfs", "du", "disk-usage", "macos"]
+categories = ["command-line-utilities", "filesystem"]
 publish = false
 
 [dependencies]

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Builds only against apfs-fuse's ApfsLib, so it carries apfs-fuse's license.
 // Read-only adapter for apfs-fuse's snapshot tree reader, not its FUSE mount.
 #include <cstdio>
 #include <array>

@@ -46,10 +46,8 @@ coverage of a live system disk.
 | [go-apfs-v2](https://github.com/deploymenttheory/go-apfs-v2) | Go APFS reader/writer for disk images                                                      | independently generated snapshot fixtures may help when native snapshot creation requires root                                         |
 | [Sleuth Kit](https://github.com/sleuthkit/sleuthkit)         | forensic filesystem readers including APFS                                                 | another possible raw-image cross-check, not a normal live directory scanner                                                            |
 
-Installed inventory found DaisyDisk, native/GNU `du`, the original Python
-prototype, and the Go du-apfs binaries. The installed `gdu` command is GNU du,
-not the separate Go project. A local apfs-dedupe checkout also uses fclones for
-content duplicate detection; that does not establish physical block ownership.
+Content-duplicate finders such as fclones identify identical files; that does
+not establish physical block ownership.
 
 ## Darwin interfaces inspected
 
