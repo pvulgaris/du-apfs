@@ -1,4 +1,4 @@
-use crate::{accounting::Node, args, scan::Scan};
+use crate::{accounting::Node, args, native, scan::Scan};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, OsStr};
@@ -86,14 +86,6 @@ fn add_path(value: &mut Map<String, Value>, key: &str, bytes: &[u8]) {
     }
 }
 
-fn cchars(chars: &[libc::c_char]) -> Vec<u8> {
-    chars
-        .iter()
-        .take_while(|&&byte| byte != 0)
-        .map(|&byte| byte as u8)
-        .collect()
-}
-
 fn checked_bytes(blocks: u64, block_size: u64) -> io::Result<u64> {
     blocks
         .checked_mul(block_size)
@@ -166,7 +158,7 @@ pub fn write(
         );
         filesystem.insert(
             "mounted_from".into(),
-            json!(String::from_utf8_lossy(&cchars(&fs.f_mntfromname))),
+            json!(String::from_utf8_lossy(&native::cchars(&fs.f_mntfromname))),
         );
         filesystem.insert(
             "capacity_bytes".into(),

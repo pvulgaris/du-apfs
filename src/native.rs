@@ -2,20 +2,26 @@ use std::ffi::{CStr, CString};
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
+// EF_NO_XATTRS from sys/attr.h; the libc crate does not export the EF_ flags.
 pub const NO_XATTRS: u64 = 2;
+// ATTR_CMN_ERROR from sys/attr.h; the libc crate does not export it.
+const ATTR_CMN_ERROR: u32 = 0x20000000;
+// The record parser in DirectoryReader::read reads these at fixed offsets,
+// so the set and its order are part of that layout.
 // OBJTYPE keeps XNU on native bulk enumeration. Its per-entry fallback can
 // report zero allocation for externally stored compressed attributes.
-const COMMON: u32 = 0x80000000
-    | 0x20000000
-    | 0x02000000
-    | 0x00040000
-    | 0x00020000
-    | 0x00000800
-    | 0x00000400
-    | 8
-    | 2
-    | 1;
-const FILE: u32 = 1 | 4 | 0x200;
+const COMMON: u32 = libc::ATTR_CMN_RETURNED_ATTRS
+    | ATTR_CMN_ERROR
+    | libc::ATTR_CMN_FILEID
+    | libc::ATTR_CMN_FLAGS
+    | libc::ATTR_CMN_ACCESSMASK
+    | libc::ATTR_CMN_CHGTIME
+    | libc::ATTR_CMN_MODTIME
+    | libc::ATTR_CMN_OBJTYPE
+    | libc::ATTR_CMN_DEVID
+    | libc::ATTR_CMN_NAME;
+const FILE: u32 =
+    libc::ATTR_FILE_LINKCOUNT | libc::ATTR_FILE_ALLOCSIZE | libc::ATTR_FILE_DATALENGTH;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Metadata {
@@ -101,6 +107,15 @@ pub fn join(parent: &CStr, name: &[u8]) -> CString {
     CString::new(b).expect("directory names contain no NUL")
 }
 
+/// A fixed-size C string field such as statfs's names, bounded by the array.
+pub fn cchars(chars: &[libc::c_char]) -> Vec<u8> {
+    chars
+        .iter()
+        .take_while(|&&byte| byte != 0)
+        .map(|&byte| byte as u8)
+        .collect()
+}
+
 fn u32_at(b: &[u8], i: usize) -> u32 {
     u32::from_le_bytes(b[i..i + 4].try_into().unwrap())
 }
@@ -134,7 +149,7 @@ impl DirectoryReader {
             volattr: 0,
             dirattr: 0,
             fileattr: FILE,
-            forkattr: 0x200,
+            forkattr: libc::ATTR_CMNEXT_EXT_FLAGS,
         };
         loop {
             let n = unsafe {
@@ -143,7 +158,7 @@ impl DirectoryReader {
                     (&mut attrs as *mut libc::attrlist).cast(),
                     self.buffer.as_mut_ptr().cast(),
                     self.buffer.len(),
-                    0x28,
+                    (libc::FSOPT_PACK_INVAL_ATTRS | libc::FSOPT_ATTR_CMN_EXTENDED) as u64,
                 )
             };
             if n < 0 {
@@ -200,7 +215,7 @@ impl DirectoryReader {
                         inode: u64_at(b, 84),
                         allocated: u64_at(b, 96) as i64,
                         size: u64_at(b, 104) as i64,
-                        extended: if u32_at(b, 20) & 0x200 != 0 {
+                        extended: if u32_at(b, 20) & libc::ATTR_CMNEXT_EXT_FLAGS != 0 {
                             u64_at(b, 112)
                         } else {
                             0
@@ -254,7 +269,7 @@ fn map_fork(
         let requested = (size - offset).max(budget - mapped).max(block);
         request[4..12].copy_from_slice(&requested.to_le_bytes());
         request[12..20].copy_from_slice(&offset.to_le_bytes());
-        if unsafe { libc::fcntl(fd.as_raw_fd(), 65, request.as_mut_ptr()) } < 0 {
+        if unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_LOG2PHYS_EXT, request.as_mut_ptr()) } < 0 {
             let error = io::Error::last_os_error();
             if offset >= size && error.raw_os_error() == Some(libc::ERANGE) {
                 break;
@@ -321,7 +336,7 @@ fn map_open_file(
     let mut ranges = Ranges::default();
     let result = map_fork(fd, current.size, current.allocated, block, &mut ranges);
     let compressed = result.as_ref().err().and_then(|e| e.raw_os_error()) == Some(libc::ENOTSUP)
-        && current.flags & 0x20 != 0;
+        && current.flags & libc::UF_COMPRESSED != 0;
     if compressed {
         // Discard any partial data-fork result before falling back to the
         // resource fork. Failed mapping must not contribute unverified ranges.
@@ -371,8 +386,18 @@ fn list_unknown_xattrs(fd: Option<&OwnedFd>, path: &CStr) -> io::Result<bool> {
         };
         let n = unsafe {
             match fd {
-                Some(fd) => libc::flistxattr(fd.as_raw_fd(), b.as_mut_ptr().cast(), b.len(), 0x20),
-                None => libc::listxattr(path.as_ptr(), b.as_mut_ptr().cast(), b.len(), 0x21),
+                Some(fd) => libc::flistxattr(
+                    fd.as_raw_fd(),
+                    b.as_mut_ptr().cast(),
+                    b.len(),
+                    libc::XATTR_SHOWCOMPRESSION,
+                ),
+                None => libc::listxattr(
+                    path.as_ptr(),
+                    b.as_mut_ptr().cast(),
+                    b.len(),
+                    libc::XATTR_SHOWCOMPRESSION | libc::XATTR_NOFOLLOW,
+                ),
             }
         };
         if n < 0 {

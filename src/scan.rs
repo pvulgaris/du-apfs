@@ -82,10 +82,11 @@ impl Scan {
             return Ok(*f);
         }
         let fs = native::filesystem_nofollow(path, meta.mode & libc::S_IFMT == libc::S_IFLNK)?;
-        let apfs = unsafe { CStr::from_ptr(fs.f_fstypename.as_ptr()) }.to_bytes() == b"apfs";
+        let apfs = native::cchars(&fs.f_fstypename) == b"apfs";
         let mut domain = 0;
         if apfs {
-            let source = unsafe { CStr::from_ptr(fs.f_mntfromname.as_ptr()) }.to_string_lossy();
+            let source = native::cchars(&fs.f_mntfromname);
+            let source = String::from_utf8_lossy(&source);
             let device = source.rsplit('@').next().unwrap();
             let digits = device
                 .strip_prefix("/dev/disk")

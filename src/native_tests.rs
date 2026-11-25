@@ -87,7 +87,14 @@ fn set_xattr(file: &CStr, name: &CStr, value: &[u8]) {
 // creates. Check the exact ambient names rather than changing security metadata.
 fn ambient_provenance(file: &CStr) -> bool {
     let mut names = [0u8; 1024];
-    let n = unsafe { libc::listxattr(file.as_ptr(), names.as_mut_ptr().cast(), names.len(), 0x21) };
+    let n = unsafe {
+        libc::listxattr(
+            file.as_ptr(),
+            names.as_mut_ptr().cast(),
+            names.len(),
+            libc::XATTR_SHOWCOMPRESSION | libc::XATTR_NOFOLLOW,
+        )
+    };
     assert!(n >= 0, "{}", std::io::Error::last_os_error());
     let mut provenance = false;
     for name in names[..n as usize]
