@@ -230,7 +230,7 @@ fn sparse_holes_and_preallocated_tails_preserve_allocation() {
 }
 
 #[test]
-fn external_attributes_cannot_claim_complete_coverage() {
+fn external_attributes_are_reported_without_failing_the_scan() {
     let fixture = Fixture::new();
     for data in [0, 4096] {
         let file = fixture.path(&format!("attribute-{data}"));
@@ -238,6 +238,7 @@ fn external_attributes_cannot_claim_complete_coverage() {
         set_xattr(&file, c"user.du_apfs_test", &[7; 65536]);
         let scan = run(file, 3).unwrap();
         assert_eq!(scan.unknown, 1);
+        assert!(crate::output::complete(&scan));
         assert_eq!(scan.tree.nodes[0].physical, data as i64);
     }
 }

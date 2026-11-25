@@ -70,8 +70,8 @@ fn execute() -> io::Result<i32> {
             );
         }
         eprintln!(
-            "du-apfs: incomplete: {} errors, {} known unmeasured bytes, {} entries with unmapped extended attributes",
-            scan.errors, scan.tree.nodes[0].unmeasured, scan.unknown
+            "du-apfs: incomplete: {} errors, {} known unmeasured bytes",
+            scan.errors, scan.tree.nodes[0].unmeasured
         );
         Ok(1)
     })();
