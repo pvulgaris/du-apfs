@@ -59,6 +59,10 @@ fn execute() -> io::Result<i32> {
         io::stdout().lock().write_all(args::USAGE.as_bytes())?;
         return Ok(0);
     }
+    if options.version {
+        println!("du-apfs {}", env!("CARGO_PKG_VERSION"));
+        return Ok(0);
+    }
     // Set policy before resolving operands or asking the filesystem anything.
     // Keep it in force through worker joins and the final statfs report.
     let mut policy = materialization::MaterializationGuard::disable()?;

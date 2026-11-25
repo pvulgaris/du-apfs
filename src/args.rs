@@ -12,7 +12,7 @@ APFS-aware physical usage. Common du flags are supported:
   -c  print a distinct total       -x  stay on each operand's filesystem
   -0  NUL-terminate rows           --json  structured byte counts
   --workers N  mapping workers (default 3)
-  --help  show this help
+  --help  show this help           --version  show the version
 ";
 
 #[derive(Debug, PartialEq, Eq)]
@@ -25,6 +25,7 @@ pub struct Options {
     pub json: bool,
     pub null: bool,
     pub help: bool,
+    pub version: bool,
     pub depth: Option<usize>,
     pub block_size: i64,
     pub paths: Vec<PathBuf>,
@@ -42,6 +43,7 @@ impl Default for Options {
             json: false,
             null: false,
             help: false,
+            version: false,
             depth: None,
             block_size: 512,
             paths: Vec::new(),
@@ -100,8 +102,8 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Options, String
                 None => (long, None),
             };
             match name {
-                b"help" | b"json" | b"human-readable" | b"summarize" | b"all" | b"total"
-                | b"one-file-system" | b"null" => {
+                b"help" | b"version" | b"json" | b"human-readable" | b"summarize" | b"all"
+                | b"total" | b"one-file-system" | b"null" => {
                     if inline_value.is_some() {
                         return Err(format!(
                             "--{} does not take a value",
@@ -111,6 +113,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Options, String
                     match name {
                         b"help" => {
                             options.help = true;
+                            return Ok(options);
+                        }
+                        b"version" => {
+                            options.version = true;
                             return Ok(options);
                         }
                         b"json" => options.json = true,
@@ -316,6 +322,7 @@ mod tests {
     #[test]
     fn help_and_invalid_options() {
         assert!(parse_str(&["--help"]).unwrap().help);
+        assert!(parse_str(&["--version"]).unwrap().version);
         for args in [
             vec!["--block-size=0"],
             vec!["--block-size=9223372036854775808"],
@@ -335,6 +342,7 @@ mod tests {
         }
         for flag in [
             "help",
+            "version",
             "json",
             "human-readable",
             "summarize",
