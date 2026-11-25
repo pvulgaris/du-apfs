@@ -1,0 +1,27 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    # macos-15 runners are Apple silicon, which is the only supported target.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Check the tag matches Cargo.toml
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          test "v$version" = "$GITHUB_REF_NAME"
+      - run: cargo test --release --locked
+      - run: cargo build --release --locked
+      - name: Package
+        run: |
+          asset=du-apfs-aarch64-apple-darwin.tar.gz
+          tar -czf "$asset" -C target/release du-apfs
+          shasum -a 256 "$asset" > "$asset.sha256"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" du-apfs-aarch64-apple-darwin.tar.gz du-apfs-aarch64-apple-darwin.tar.gz.sha256 --generate-notes
