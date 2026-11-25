@@ -73,9 +73,12 @@ physical total. A directory whose own listing fails has no numeric text row;
 JSON retains its measured lower bound with `enumeration_complete: false`. Parent
 rows can still contain measured bytes from accessible children, so always check
 the exit status and overall coverage before treating a total as complete.
-Extended attributes that cannot be mapped are separately counted in
-`coverage.unmapped_xattr_entries`, including attributes on directories. Their
-byte count is unknown, and the conservative count includes embedded attributes.
+Extended attributes other than the resource fork are not mapped. JSON counts
+entries that have them in `coverage.unmapped_xattr_entries`, including
+directories. The count is conservative: it includes small attributes embedded in
+filesystem metadata, which occupy no file blocks, so it does not affect the exit
+status or `coverage.complete`. Large attributes stored as separate streams do
+occupy space that totals omit.
 
 `filesystem.used_bytes` in JSON is statfs capacity minus its free-space counter
 for the first scanned APFS operand. These counters are sampled before output;

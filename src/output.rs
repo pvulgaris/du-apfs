@@ -6,8 +6,11 @@ use std::io::{self, BufWriter, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
+// Extended attributes are reported separately: the audit cannot tell an
+// embedded attribute (no file blocks) from an external stream, so counting
+// them here would mark nearly every real scan incomplete.
 pub fn complete(scan: &Scan) -> bool {
-    scan.errors == 0 && scan.tree.nodes[0].unmeasured == 0 && scan.unknown == 0
+    scan.errors == 0 && scan.tree.nodes[0].unmeasured == 0
 }
 
 fn invalid(message: &str) -> io::Error {

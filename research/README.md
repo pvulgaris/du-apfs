@@ -40,9 +40,9 @@ counter atomic with the scan.
    `cargo test --locked --release oracle_tests::export_snapshot_extents -- --ignored --exact`.
    It requires a read-only snapshot with 4096-byte blocks and uses the
    production Rust mapper. Mapping failures fail the export.
-5. Capture production `du-apfs -a --json SNAPSHOT_ROOT` output. An
-   incomplete-coverage exit status is expected when external attributes cannot
-   be mapped; retain both the JSON and stderr.
+5. Capture production `du-apfs -a --json SNAPSHOT_ROOT` output and its stderr.
+   External attributes are not mapped and do not affect the exit status; their
+   count is in `coverage.unmapped_xattr_entries`.
 6. Run
    `python3 research/compare_raw.py RAW_DUMP MANIFEST.json SCAN.json SNAPSHOT_ROOT --block-size 4096 --snapshot-xid XID --mapped-extents EXPORT.jsonl --namespace-scope MANIFEST.json.scope --raw-identity RAW_DUMP.identity.json --require-snapshot-identity --strict`.
 
