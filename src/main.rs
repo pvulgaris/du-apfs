@@ -14,6 +14,9 @@ use std::io::{self, Write};
 use std::time::Instant;
 
 fn main() {
+    // Rust ignores SIGPIPE, which turns `du-apfs | head` into a reported
+    // write error. Die from the signal instead, as du does.
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     let status = match execute() {
         Ok(status) => status,
         Err(error) => {

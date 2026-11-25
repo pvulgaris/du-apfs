@@ -74,3 +74,23 @@ fn an_unreadable_directory_is_reported_once() {
 fn running_as_root() -> bool {
     Command::new("id").arg("-u").output().unwrap().stdout == b"0\n"
 }
+
+#[test]
+fn a_closed_pipe_ends_quietly() {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Stdio;
+    let fixture = Fixture::new("pipe");
+    fs::write(fixture.0.join("file"), [7; 4096]).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_du-apfs"))
+        .arg("-a")
+        .arg(&fixture.0)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Close the reading end before the scan writes anything.
+    drop(child.stdout.take());
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.signal(), Some(13), "{output:?}"); // SIGPIPE
+    assert!(output.stderr.is_empty(), "{output:?}");
+}
